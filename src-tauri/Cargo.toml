@@ -1,0 +1,49 @@
+[package]
+name = "ocard"
+version = "0.1.0"
+description = "OCard - DIT media backup, culling and delivery tool"
+authors = ["OCard Team"]
+edition = "2021"
+rust-version = "1.77"
+
+[lib]
+name = "ocard_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+xxhash-rust = { version = "0.8", features = ["xxh3"] }
+chrono = { version = "0.4", features = ["serde"] }
+walkdir = "2"
+regex = "1"
+kamadak-exif = "0.5"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+log = "0.4"
+thiserror = "2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.9"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[features]
+default = []
+# 启用 ONNX Runtime 本地 AI 推理（模型随应用分发）。默认关闭以避免 CI/离线
+# 构建负担；不启用时 culling 模块提供纯算法评分（清晰度/曝光）与时间聚类，
+# 人脸/闭眼检测返回"模型未加载"的诚实降级。
+full-ai = ["dep:ort"]
+
+[dependencies.ort]
+version = "2"
+optional = true
+default-features = false
+features = ["load-dynamic"]
