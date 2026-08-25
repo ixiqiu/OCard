@@ -43,7 +43,7 @@ default = []
 full-ai = ["dep:ort"]
 
 [dependencies.ort]
-version = "2"
+version = "2.0.0-rc.13"
 optional = true
 default-features = false
-features = ["load-dynamic"]
+features = ["load-dynamic", "ndarray"]
