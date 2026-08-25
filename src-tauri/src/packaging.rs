@@ -238,11 +238,14 @@ mod tests {
             input("/x/5.jpg", 50, None),
         ];
         let buckets = bucket_by_half_day(&inputs);
-        assert_eq!(buckets.len(), 3);
+        // (20260824,Am) (20260824,Pm) (20260825,Am) (00000000,Am) 共 4 桶
+        assert_eq!(buckets.len(), 4);
         // 20260824 上午：2 个
         assert_eq!(buckets[&("20260824".to_string(), HalfDay::Am)].len(), 2);
         // 20260824 下午：1 个
         assert_eq!(buckets[&("20260824".to_string(), HalfDay::Pm)].len(), 1);
+        // 20260825 上午：1 个
+        assert_eq!(buckets[&("20260825".to_string(), HalfDay::Am)].len(), 1);
         // 无时间戳进兜底桶
         assert_eq!(buckets[&("00000000".to_string(), HalfDay::Am)].len(), 1);
     }

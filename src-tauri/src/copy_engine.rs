@@ -108,8 +108,9 @@ pub fn rel_path(root: &Path, abs: &Path) -> String {
 }
 
 /// 拷贝单个文件到多个目的地：流式读源，边读边算 hash，并行写所有目的地临时文件，
-/// 成功后统一改名。任一目的地失败：删除该目的地临时文件并记录错误；其余目的地保留。
-/// 返回 (源大小, hash, 各目的地结果)。
+/// 成功后统一改名。任一目的地失败：删除该目的地临时文件并记录错误；其余目的地保留
+/// （PRD §6.4 逐文件标红、任务不整体作废）。
+/// 返回 (源大小, hash, 各目的地结果，顺序与 dest_paths 一致)。
 pub fn copy_file_multi(
     src: &Path,
     dest_paths: &[PathBuf],
@@ -117,56 +118,72 @@ pub fn copy_file_multi(
     let mut src_file = fs::File::open(src)?;
     let mut hasher = xxhash_rust::xxh3::Xxh3::new();
 
-    // 为每个目的地创建临时文件
-    let mut writers: Vec<(PathBuf, PathBuf, fs::File)> = Vec::new(); // (tmp, final, file)
-    for dest in dest_paths {
+    // 逐目的地 setup：任一失败只记录错误，其余目的地继续
+    let mut writers: Vec<(usize, PathBuf, PathBuf, fs::File)> = Vec::new(); // (dest_idx, tmp, final, file)
+    let mut results: Vec<Option<Result<(), String>>> = vec![None; dest_paths.len()];
+    for (idx, dest) in dest_paths.iter().enumerate() {
         if let Some(parent) = dest.parent() {
-            fs::create_dir_all(parent)?;
+            if let Err(e) = fs::create_dir_all(parent) {
+                results[idx] = Some(Err(format!("{dest:?}: {e}")));
+                continue;
+            }
         }
         let tmp = PathBuf::from(format!("{}{}", dest.display(), TMP_SUFFIX));
         match fs::File::create(&tmp) {
-            Ok(f) => writers.push((tmp.clone(), dest.clone(), f)),
+            Ok(f) => writers.push((idx, tmp.clone(), dest.clone(), f)),
             Err(e) => {
-                // 清理已开的临时文件
-                for (t, _, _) in &writers {
-                    let _ = fs::remove_file(t);
-                }
-                return Err(e);
+                results[idx] = Some(Err(format!("{dest:?}: {e}")));
             }
         }
     }
 
-    let mut buf = vec![0u8; hash::CHUNK_SIZE];
-    let mut total: u64 = 0;
-    loop {
-        let n = src_file.read(&mut buf)?;
-        if n == 0 {
-            break;
+    let (total, digest) = match (|| -> io::Result<(u64, String)> {
+        let mut buf = vec![0u8; hash::CHUNK_SIZE];
+        let mut total: u64 = 0;
+        loop {
+            let n = src_file.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            hasher.update(&buf[..n]);
+            total += n as u64;
+            for (_, _, _, w) in writers.iter_mut() {
+                w.write_all(&buf[..n])?;
+            }
         }
-        hasher.update(&buf[..n]);
-        total += n as u64;
-        for (_, _, w) in writers.iter_mut() {
-            w.write_all(&buf[..n])?;
+        Ok((total, format!("{:016x}", hasher.digest())))
+    })() {
+        Ok(v) => v,
+        Err(e) => {
+            // 中途失败：清理所有已创建的临时文件（NAS 断连不产生半个文件）
+            for (_, tmp, _, _) in &writers {
+                let _ = fs::remove_file(tmp);
+            }
+            return Err(e);
         }
-    }
-    let digest = format!("{:016x}", hasher.digest());
+    };
 
-    let mut results: Vec<Result<(), String>> = Vec::with_capacity(writers.len());
-    for (tmp, final_path, mut w) in writers {
+    for (idx, tmp, final_path, mut w) in writers {
         if let Err(e) = w.flush().and_then(|_| w.sync_all()) {
             let _ = fs::remove_file(&tmp);
-            results.push(Err(format!("{final_path:?}: {e}")));
+            results[idx] = Some(Err(format!("{final_path:?}: {e}")));
             continue;
         }
         // 校验后改名（同目录 rename 安全）
         match fs::rename(&tmp, &final_path) {
-            Ok(()) => results.push(Ok(())),
+            Ok(()) => results[idx] = Some(Ok(())),
             Err(e) => {
                 let _ = fs::remove_file(&tmp);
-                results.push(Err(format!("{final_path:?}: {e}")));
+                results[idx] = Some(Err(format!("{final_path:?}: {e}")));
             }
         }
     }
+
+    let results = results
+        .into_iter()
+        .enumerate()
+        .map(|(i, r)| r.unwrap_or_else(|| Err(format!("{}: 未写入", dest_paths[i].display()))))
+        .collect();
 
     Ok((total, digest, results))
 }
@@ -545,8 +562,12 @@ mod tests {
         let bad = tmp.path().join("bad");
         fs::write(&bad, b"not a dir").unwrap();
         let res = copy_file_multi(&src, &[good.join("x.bin"), bad.join("x.bin")]);
-        assert!(res.is_err());
-        // 好的目的地临时文件被清理
+        // 逐目的地容错：坏目的地失败不中断整体，好目的地正常落盘
+        let (_, _, results) = res.unwrap();
+        assert!(results[0].is_ok());
+        assert!(results[1].is_err());
+        // 好目的地已改名落盘，无 .ocard-part 残留
+        assert!(good.join("x.bin").exists());
         assert!(!good.join("x.bin.ocard-part").exists());
     }
 }
