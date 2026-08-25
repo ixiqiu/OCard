@@ -7,7 +7,7 @@
 //! - 时段：`MMDD上午/下午`，如 `0101上午`
 //! - 成片命名：`时间日期_片名_分辨率_用途_版本`
 
-use chrono::{Datelike, NaiveDateTime};
+use chrono::{Datelike, NaiveDateTime, Timelike};
 use regex::Regex;
 use std::sync::OnceLock;
 

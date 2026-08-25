@@ -4,7 +4,7 @@
 //! 不压缩，生成包文件夹 + 交付清单（每包内容、张数、容量）。
 //! 打包完成给出待上传列表，人工上传百度网盘、人工发链接；OCard 记录交付状态。
 
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Timelike};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::fs;
@@ -136,14 +136,14 @@ pub fn run_packaging(
                     _ => (name.as_str(), None),
                 };
                 let mut n = 1u32;
-                let candidate = |n: u32| match ext {
+                let make_candidate = |n: u32| match ext {
                     Some(e) => pkg_dir.join(format!("{base}_{n}.{e}")),
                     None => pkg_dir.join(format!("{base}_{n}")),
                 };
-                let mut candidate = candidate(n);
+                let mut candidate = make_candidate(n);
                 while candidate.exists() {
                     n += 1;
-                    candidate = candidate(n);
+                    candidate = make_candidate(n);
                 }
                 candidate
             } else {

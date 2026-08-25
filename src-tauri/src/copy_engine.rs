@@ -274,7 +274,7 @@ pub fn run_copy_task(
                     verified: false,
                 });
                 outcomes.push(CopyFileOutcome {
-                    rel_path: rel,
+                    rel_path: rel.clone(),
                     size,
                     hash: String::new(),
                     verified: false,

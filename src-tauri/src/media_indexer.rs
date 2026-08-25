@@ -68,6 +68,7 @@ pub fn scan_media(dir: &Path) -> Vec<MediaItem> {
             Err(_) => continue,
         };
         let (dt, make, model) = extract_exif(path);
+        let is_video = is_video_ext(&ext);
         items.push(MediaItem {
             path: path.to_string_lossy().to_string(),
             name: path
@@ -80,7 +81,7 @@ pub fn scan_media(dir: &Path) -> Vec<MediaItem> {
             datetime_original: dt,
             camera_make: make,
             camera_model: model,
-            is_video: is_video_ext(&ext),
+            is_video,
         });
     }
     items.sort_by(|a, b| a.path.cmp(&b.path));
@@ -118,22 +119,19 @@ pub fn extract_exif(path: &Path) -> (String, Option<String>, Option<String>) {
         Err(_) => return (fallback, None, None),
     };
     let mut bufreader = std::io::BufReader::new(&file);
-    let exif = match kamadak_exif::Reader::new(&mut bufreader).read() {
+    let exif = match exif::Reader::new().read_from_container(&mut bufreader) {
         Ok(e) => e,
         Err(_) => return (fallback, None, None),
     };
     let make = exif
-        .get_field(kamadak_exif::Tag::Make)
-        .and_then(|f| f.value.display_as_string().ok())
-        .map(|s| s.to_string());
+        .get_field(exif::Tag::Make, exif::In::PRIMARY)
+        .map(|f| f.value.display_as(exif::Tag::Make).to_string());
     let model = exif
-        .get_field(kamadak_exif::Tag::Model)
-        .and_then(|f| f.value.display_as_string().ok())
-        .map(|s| s.to_string());
+        .get_field(exif::Tag::Model, exif::In::PRIMARY)
+        .map(|f| f.value.display_as(exif::Tag::Model).to_string());
     let dt = exif
-        .get_field(kamadak_exif::Tag::DateTimeOriginal)
-        .and_then(|f| f.value.display_as_string().ok())
-        .map(|s| s.to_string())
+        .get_field(exif::Tag::DateTimeOriginal, exif::In::PRIMARY)
+        .map(|f| f.value.display_as(exif::Tag::DateTimeOriginal).to_string())
         .and_then(|s| parse_exif_dt(&s))
         .unwrap_or(fallback);
     (dt, make, model)

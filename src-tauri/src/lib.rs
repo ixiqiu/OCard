@@ -680,7 +680,7 @@ fn run_packaging(
     folder_rel: String,
 ) -> Result<packaging::DeliveryManifest, String> {
     let root = project_root(&state, &project_id)?;
-    let inputs = list_package_inputs(state.clone(), project_id.clone(), folder_rel)?;
+    let inputs = list_package_inputs(state.clone(), project_id.clone(), folder_rel.clone())?;
     let cfg = state.config.lock().unwrap();
     let (_, manifest) = packaging::run_packaging(&root, &inputs, &cfg.operator)?;
     let audit = audit_log::AuditLog::new(&root.join(".ocard/logs"), &cfg.machine_id);
