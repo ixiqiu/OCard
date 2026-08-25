@@ -66,6 +66,28 @@ jobs:
       - name: Tauri build (打包 msi/dmg/AppImage)
         run: npm run tauri build -- --bundles ${{ matrix.bundles }}
 
+      - name: Rebuild AppImage without bundled WebKitGTK (linux only)
+        # AppImage 捆绑 Ubuntu 构建的 WebKitGTK 在 Arch 等滚动发行版上与系统 EGL
+        # 不兼容（EGL_BAD_PARAMETER）。这里从 AppDir 移除 WebKit 后重新打包，
+        # 运行时改用系统 libwebkit2gtk-4.1（用户需安装系统 webkit2gtk 依赖）。
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          set -e
+          APP_DIR=src-tauri/target/release/bundle/appimage/OCard.AppDir
+          # 移除捆绑的 WebKitGTK / JavaScriptCore
+          rm -rf "$APP_DIR/usr/lib/webkit2gtk-4.1"
+          rm -f  "$APP_DIR/usr/lib/libwebkit2gtk-4.1.so.0"
+          rm -f  "$APP_DIR/usr/lib/libjavascriptcoregtk-4.1.so.0"
+          # 校验 AppDir 中不再包含 WebKitGTK（appimagetool 不会重新收集依赖）
+          if find "$APP_DIR" \( -name "*webkit*" -o -name "WebKitWebProcess" \) | grep -q .; then
+            echo "ERROR: WebKitGTK still in AppDir"; exit 1;
+          fi
+          # appimagetool 只负责打包
+          curl -sL https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage -o /tmp/appimagetool.AppImage
+          chmod +x /tmp/appimagetool.AppImage
+          cd src-tauri/target/release/bundle/appimage
+          APPIMAGE_EXTRACT_AND_RUN=1 /tmp/appimagetool.AppImage OCard.AppDir OCard_0.1.0_amd64.AppImage
+
       - name: Upload bundle artifacts
         uses: actions/upload-artifact@v4
         with:
