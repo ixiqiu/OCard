@@ -30,7 +30,7 @@ export default function DevicesPanel({ projectId, onChanged }: Props) {
     setErr(null);
     setMsg(null);
     try {
-      const cam = await addCamera(projectId, model, position, operator, null);
+      const cam = await addCamera(projectId, model, position, operator, undefined);
       setMsg(`已登记相机，自动生成编码：${cam.code}`);
       setModel("");
       setOperator("");
@@ -45,7 +45,7 @@ export default function DevicesPanel({ projectId, onChanged }: Props) {
     setErr(null);
     setMsg(null);
     try {
-      const card = await addCard(projectId, label, cameraId, null);
+      const card = await addCard(projectId, label, cameraId, undefined);
       setMsg(`已登记存储卡：${card.label}`);
       setLabel("");
       load();
