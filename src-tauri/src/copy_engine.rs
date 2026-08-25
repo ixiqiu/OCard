@@ -346,7 +346,10 @@ pub fn run_copy_task(
     let verified_count = outcomes.iter().filter(|o| o.verified).count();
     let failed_count = outcomes.iter().filter(|o| !o.errors.is_empty()).count();
     let skipped_count = outcomes.iter().filter(|o| o.skipped).count();
-    let all_verified = !outcomes.is_empty() && verified_count == outcomes.len();
+    // 全部校验通过 = 每个文件都在所有目的地成功写入并通过回读校验（无任何错误）
+    let all_verified = !outcomes.is_empty()
+        && verified_count == outcomes.len()
+        && outcomes.iter().all(|o| o.errors.is_empty());
 
     if all_verified {
         manifest.finish();
