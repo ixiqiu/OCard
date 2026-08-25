@@ -74,12 +74,10 @@ jobs:
         run: |
           set -e
           APP_DIR=src-tauri/target/release/bundle/appimage/OCard.AppDir
-          # 移除捆绑的 WebKitGTK / JavaScriptCore
-          rm -rf "$APP_DIR/usr/lib/webkit2gtk-4.1"
-          rm -f  "$APP_DIR/usr/lib/libwebkit2gtk-4.1.so.0"
-          rm -f  "$APP_DIR/usr/lib/libjavascriptcoregtk-4.1.so.0"
+          # 移除捆绑的 WebKitGTK / JavaScriptCore（可能分布在 usr/lib 或 usr/lib/x86_64-linux-gnu）
+          find "$APP_DIR/usr" \( -iname "*webkit*" -o -iname "*javascriptcore*" \) -prune -exec rm -rf {} + 2>/dev/null || true
           # 校验 AppDir 中不再包含 WebKitGTK（appimagetool 不会重新收集依赖）
-          if find "$APP_DIR" \( -name "*webkit*" -o -name "WebKitWebProcess" \) | grep -q .; then
+          if find "$APP_DIR" \( -iname "*webkit*" -o -iname "*javascriptcore*" \) | grep -q .; then
             echo "ERROR: WebKitGTK still in AppDir"; exit 1;
           fi
           # appimagetool 只负责打包
