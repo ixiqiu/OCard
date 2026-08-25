@@ -128,7 +128,7 @@ pub fn run_packaging(
             if name.is_empty() {
                 continue;
             }
-            let dest = pkg_dir.join(name);
+            let dest = pkg_dir.join(&name);
             // 同名冲突：加序号
             let dest = if dest.exists() {
                 let (base, ext) = match name.rfind('.') {
